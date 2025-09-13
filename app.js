@@ -10,7 +10,7 @@ new Vue({
         inGame: false,
         dealerTurn: false,
         message: 'Vsaď si...',
-        balance: 200,
+        balance: 500,
         bet: 0,
         playerName: "Ty",
         lastTimePlayed: 0,
@@ -231,12 +231,15 @@ new Vue({
             const now = Date.now();
             const elapsedSeconds = (now - this.lastTimePlayed) / 1000;
             const baseRate = 1.5;
-            const bonus = Math.floor((baseRate * Math.sqrt(elapsedSeconds)) / 10) * 10;
-            if (bonus > 0)
+            var bonus = Math.floor((baseRate * Math.sqrt(elapsedSeconds)) / 10) * 10;
+            if (this.isNumber(bonus) && bonus > 0) {
                 window.alert("To byla doba, co jsme se neviděli. Mezitím ti přistálo do peněženky $" + bonus);
-            this.setBalance(this.balance + bonus);
-        }
-
+                this.setBalance(this.balance + bonus);
+            }
+        },
+        isNumber(value) {
+            return typeof value === 'number';
+        },
     },
     mounted() {
         var pname = localStorage.getItem("blackjackPlayerName");
@@ -246,18 +249,18 @@ new Vue({
         }
         this.playerName = pname;
 
-        const bal = localStorage.getItem("blackjackBalance");
-        if (bal === null || bal === NaN) {
-            this.setBalance(200);
-        } else {
-            this.setBalance(bal);
-        }
+        // const bal = localStorage.getItem("blackjackBalance");
+        // if (bal === null || bal === NaN || !this.isNumber(bal)) {
+        //     this.setBalance(200);
+        // } else {
+        //     this.setBalance(bal);
+        // }
 
         const ltp = localStorage.getItem("blackjackLastTimePlayed") || Date.now();
         this.lastTimePlayed = ltp;
 
-        console.warn({pname, bal, ltp});
-        this.applyIdleIncome();
+        // console.warn({pname, bal, ltp});
+        // this.applyIdleIncome();
 
         this.supabase = supabase.createClient(
             'https://diivcdhwzwhwzjauhyyz.supabase.co',
