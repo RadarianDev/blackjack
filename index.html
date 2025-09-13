@@ -10,8 +10,17 @@
 
 <body class="bg-dark text-light">
     <div id="app" class="container py-5 text-center">
+        <div class="row">
+            <div class="col-sm-2">
+            </div>
+            <div class="col-md-8">
+                <h1 class="mb-4">Mozartjack</h1>
+            </div>
+            <div class="col-sm-2">
+                <button class="btn btn-info btn-sm m-1" style="float: right;" @click="changeName">Přejmenovat</button>
+            </div>
+        </div>
 
-        <h1 class="mb-4">Mozartjack</h1>
         <p>Blackjack po Mozarťácku</p>
 
         <hr />
@@ -19,9 +28,9 @@
         <!-- Controls -->
         <div class="mb-3">
             <button class="btn btn-success m-1" @click="deal" :disabled="inGame || bet===0">Deal</button>
-            <button class="btn btn-primary m-1" @click="hit" :disabled="!inGame">Hit</button>
-            <button class="btn btn-warning m-1" @click="stand" :disabled="!inGame">Stand</button>
-            <button class="btn btn-secondary m-1" @click="removeBet" :disabled="inGame || bet===0">Zrušit sázku</button>
+            <button class="btn btn-primary m-1" @click="hit" v-if="inGame" :disabled="!inGame">Hit</button>
+            <button class="btn btn-warning m-1" @click="stand" v-if="inGame" :disabled="!inGame">Stand</button>
+            <button class="btn btn-secondary m-1" @click="removeBet" v-if="!inGame" :disabled="inGame || bet===0">Zrušit sázku</button>
         </div>
 
         <div class="row">
@@ -64,7 +73,7 @@
                 <!-- Player -->
                 <div class="row mb-4">
                     <div class="col">
-                        <h3>Ty</h3>
+                        <h3>{{ playerName }}</h3>
                         <div class="d-flex justify-content-center flex-wrap">
                             <div v-for="(card, index) in playerCards" :key="'player'+index" class="card m-1"
                                 :class="playerCardClass(card)" style="width: 70px; height: 100px;">

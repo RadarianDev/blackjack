@@ -8,7 +8,8 @@ new Vue({
         dealerTurn: false,
         message: 'Vsaď si...',
         balance: 500,
-        bet: 0
+        bet: 0,
+        playerName: "Ty",
     },
     computed: {
         playerTotal() {
@@ -100,6 +101,11 @@ new Vue({
             this.balance += this.bet;
             this.bet = 0;
         },
+        changeName() {
+            var pname = window.prompt("Ach, to předchozí se nehodilo? Nuže dobrá... jakpak ti mám tedy říkat?");
+            localStorage.setItem("blackjackPlayerName", pname);
+            this.playerName = pname;
+        },
         checkWinner() {
             if (this.playerTotal > 21) {
                 this.message = 'Bust! Dealer Vyhrává!';
@@ -153,5 +159,13 @@ new Vue({
                 el.play();
             }
         },
+    },
+    mounted() {
+        var pname = localStorage.getItem("blackjackPlayerName");
+        if (pname === null) {
+            pname = window.prompt("No počkej, tebe neznám. Jak se jmenuješ?");
+            localStorage.setItem("blackjackPlayerName", pname);
+        }
+        this.playerName = pname;
     }
 });
