@@ -89,11 +89,16 @@ new Vue({
         },
         stand() {
             this.dealerTurn = true;
-            while (this.dealerTotal < 21 && this.dealerTotal !== 17) {
+            while (this.dealerTotal < 21 && this.dealerTotal < this.playerTotal && this.dealerTotal !== 17) {
                 this.dealerCards.push(this.deck.pop());
             }
             this.checkWinner();
             this.inGame = false;
+        },
+        removeBet() {
+            console.log("egg")
+            this.balance += this.bet;
+            this.bet = 0;
         },
         checkWinner() {
             if (this.playerTotal > 21) {

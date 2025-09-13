@@ -21,6 +21,7 @@
             <button class="btn btn-success m-1" @click="deal" :disabled="inGame || bet===0">Deal</button>
             <button class="btn btn-primary m-1" @click="hit" :disabled="!inGame">Hit</button>
             <button class="btn btn-warning m-1" @click="stand" :disabled="!inGame">Stand</button>
+            <button class="btn btn-secondary m-1" @click="removeBet" :disabled="inGame || bet===0">Zrušit sázku</button>
         </div>
 
         <div class="row">
@@ -80,9 +81,6 @@
 
         <!-- Result -->
         <h2 class="mt-3">{{ message }}</h2>
-
-        <hr />
-        <p style="text-align: right;">Tato webovka je právoplatným majetkem 1.B Gymnázia Mozartova</p>
     </div>
 
     <script src="app.js"></script>
