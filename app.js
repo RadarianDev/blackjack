@@ -108,8 +108,12 @@ new Vue({
         },
         changeName() {
             var pname = window.prompt("Ach, to předchozí se nehodilo? Nuže dobrá... jakpak ti mám tedy říkat?");
-            localStorage.setItem("blackjackPlayerName", pname);
-            this.playerName = pname;
+            if (confirm("Změna jména způsobí reset tvého zůstatku. Vážně chceš pokračovat?")) {
+                localStorage.setItem("blackjackPlayerName", pname);
+                this.balance = 500;
+                this.bet = 0;
+                this.playerName = pname;
+            }
         },
         checkWinner() {
             if (this.playerTotal > 21) {
@@ -244,7 +248,7 @@ new Vue({
     mounted() {
         var pname = localStorage.getItem("blackjackPlayerName");
         if (pname === null) {
-            pname = window.prompt("No počkej, tebe neznám. Jak se jmenuješ?");
+            pname = window.prompt("No počkej, tebe neznám. Jaká je tvoje přezdívka?");
             localStorage.setItem("blackjackPlayerName", pname);
         }
         this.playerName = pname;
