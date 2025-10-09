@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Text Split & Reconstruct (Unicode + Newlines)</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #fafafa;
+      color: #222;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 0.5rem 0.9rem;
+      font-size: 1rem;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-right: 0.5rem;
+    }
+    button:hover { background: #0056b3; }
+    pre {
+      background: #eee;
+      padding: 1rem;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .stage { margin-bottom: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 1.5rem; }
+    .note { color: #555; font-size: 0.9rem; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Text Split & Reconstruct (Unicode + Newlines)</h1>
+
+    <!-- Stage 1 -->
+    <div class="stage" v-if="stage === 1">
+      <h2>Stage 1 — Split & Normalize</h2>
+      <p class="note">Supports diacritics (š, ř, á …), punctuation, and line breaks.</p>
+      <textarea v-model="inputText" placeholder="Enter text..."></textarea>
+      <div>
+        <button @click="processText">Process</button>
+        <button @click="reset">Reset</button>
+      </div>
+
+      <div v-if="outputText">
+        <h3>Words (copy for Stage 2)</h3>
+        <pre>{{ outputText }}</pre>
+        <button @click="goToStage2">Go to Stage 2</button>
+      </div>
+    </div>
+
+    <!-- Stage 2 -->
+    <div class="stage" v-else-if="stage === 2">
+      <h2>Stage 2 — Reconstruct</h2>
+      <p class="note">Paste lowercase word list (one per line). Original newlines and punctuation will be restored.</p>
+      <textarea v-model="reconstructionInput" placeholder="Paste modified words..."></textarea>
+      <div>
+        <button @click="reconstructText">Reconstruct</button>
+        <button @click="reset">Start Over</button>
+      </div>
+
+      <div v-if="reconstructedText">
+        <h3>Reconstructed Text</h3>
+        <pre>{{ reconstructedText }}</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          stage: 1,
+          inputText: "",
+          outputText: "",
+          reconstructionInput: "",
+          reconstructedText: "",
+          memory: [] // sequence of tokens: {type: 'word'|'punct'|'newline', ...}
+        };
+      },
+      methods: {
+        processText() {
+          this.memory = [];
+          const words = [];
+
+          // Use Unicode property escapes if supported
+          let tokenRegex, wordRegex;
+          try {
+            tokenRegex = /([\p{L}\p{M}\p{N}]+|[\p{P}\p{S}]+|\r?\n)/gu;
+            wordRegex = /^[\p{L}\p{M}\p{N}]+$/u;
+          } catch (e) {
+            tokenRegex = /([A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF]+|[^A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF]+|\r?\n)/g;
+            wordRegex = /^[A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF]+$/;
+          }
+
+          const tokens = this.inputText.match(tokenRegex) || [];
+
+          for (let token of tokens) {
+            if (token === "\n" || token === "\r\n") {
+              this.memory.push({ type: "newline" });
+              continue;
+            }
+
+            if (wordRegex.test(token)) {
+              const first = ([...token][0] || "");
+              const isCap = first !== first.toLowerCase();
+              this.memory.push({ type: "word", value: token, cap: isCap });
+              words.push(token.toLowerCase());
+            } else {
+              this.memory.push({ type: "punct", value: token });
+            }
+          }
+
+          this.outputText = words.join("\n");
+        },
+
+        goToStage2() {
+          this.stage = 2;
+        },
+
+        reconstructText() {
+          const inputWords = this.reconstructionInput.split(/\r?\n/).filter(w => w.trim() !== "");
+          let wordIndex = 0;
+          let result = "";
+
+          for (const item of this.memory) {
+            if (item.type === "word") {
+              let w = inputWords[wordIndex++] || "";
+              if (item.cap && w.length > 0) {
+                const chars = [...w];
+                chars[0] = chars[0].toLocaleUpperCase();
+                w = chars.join("");
+              }
+              result += w + " ";
+            } else if (item.type === "punct") {
+              result = result.trimEnd() + item.value + " ";
+            } else if (item.type === "newline") {
+              result = result.trimEnd() + "\n";
+            }
+          }
+
+          this.reconstructedText = result.trimEnd();
+        },
+
+        reset() {
+          this.stage = 1;
+          this.inputText = "";
+          this.outputText = "";
+          this.reconstructionInput = "";
+          this.reconstructedText = "";
+          this.memory = [];
+        }
+      }
+    }).mount("#app");
+  </script>
+</body>
+</html>
