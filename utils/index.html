@@ -1,87 +1,170 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
-  <title>Text Split & Reconstruct (Unicode + Newlines)</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Split & Reconstruct — The Most Useless Tool on the Web</title>
+
+  <!-- Bootstrap 5.3 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
   <style>
     body {
-      font-family: system-ui, sans-serif;
-      background: #fafafa;
-      color: #222;
-      max-width: 900px;
-      margin: 2rem auto;
+      background: #f8f9fa;
+    }
+
+    pre.output {
+      background: #ffffff;
+      border: 1px solid #dee2e6;
       padding: 1rem;
-    }
-    textarea {
-      width: 100%;
-      height: 150px;
-      padding: 10px;
-      font-family: monospace;
-      font-size: 1rem;
-      margin-bottom: 1rem;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-    }
-    button {
-      padding: 0.5rem 0.9rem;
-      font-size: 1rem;
-      border: none;
-      background: #007bff;
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-right: 0.5rem;
-    }
-    button:hover { background: #0056b3; }
-    pre {
-      background: #eee;
-      padding: 1rem;
-      border-radius: 8px;
       white-space: pre-wrap;
-      word-wrap: break-word;
+      word-break: break-word;
+      border-radius: .375rem;
     }
-    .stage { margin-bottom: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 1.5rem; }
-    .note { color: #555; font-size: 0.9rem; margin-bottom: 0.5rem; }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+    }
+
+    .token-pill {
+      font-size: .85rem;
+      margin: .12rem;
+    }
+
+    /* subtle monospace textarea */
+    textarea.mono {
+      min-height: 200px;
+    }
   </style>
 </head>
+
 <body>
-  <div id="app">
-    <h1>Text Split & Reconstruct (Unicode + Newlines)</h1>
-
-    <!-- Stage 1 -->
-    <div class="stage" v-if="stage === 1">
-      <h2>Stage 1 — Split & Normalize</h2>
-      <p class="note">Supports diacritics (š, ř, á …), punctuation, and line breaks.</p>
-      <textarea v-model="inputText" placeholder="Enter text..."></textarea>
-      <div>
-        <button @click="processText">Process</button>
-        <button @click="reset">Reset</button>
-      </div>
-
-      <div v-if="outputText">
-        <h3>Words (copy for Stage 2)</h3>
-        <pre>{{ outputText }}</pre>
-        <button @click="goToStage2">Go to Stage 2</button>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="#">Split & Reconstruct</a>
+      <div class="d-none d-md-block text-white-50 small">All credits to Mr. Rar and his super duper coding >:D
       </div>
     </div>
+  </nav>
 
-    <!-- Stage 2 -->
-    <div class="stage" v-else-if="stage === 2">
-      <h2>Stage 2 — Reconstruct</h2>
-      <p class="note">Paste lowercase word list (one per line). Original newlines and punctuation will be restored.</p>
-      <textarea v-model="reconstructionInput" placeholder="Paste modified words..."></textarea>
-      <div>
-        <button @click="reconstructText">Reconstruct</button>
-        <button @click="reset">Start Over</button>
+  <div id="app" class="container">
+    <div class="row g-4">
+      <!-- Stage 1 -->
+      <div class="col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">Stage 1: Split & Normalize</h5>
+            <p class="card-text text-muted small">
+              Paste any text. The tool tokenizes into alphanumeric word tokens and <strong>every single non-alphanumeric
+                character</strong> (space, punctuation, newline, symbol) is stored as an individual token for
+              reconstruction.
+            </p>
+
+            <div class="mb-3">
+              <label class="form-label">Input text</label>
+              <textarea class="form-control mono" v-model="inputText"
+                placeholder="Enter text with diacritics, punctuation, newlines, whatever..."></textarea>
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+              <button class="btn btn-primary" @click="processText">Process</button>
+              <button class="btn btn-outline-secondary" @click="clearStage1">Clear</button>
+              <button class="btn btn-outline-info" :disabled="!memory.length" @click="showMemory = !showMemory">
+                {{ showMemory ? 'Hide' : 'Show' }} Token Memory
+              </button>
+              <button class="btn btn-success ms-auto" :disabled="!outputText" @click="goToStage2">Go to Stage 2</button>
+            </div>
+
+            <div v-if="outputText">
+              <label class="form-label">Lowercased words (copy this to Stage 2)</label>
+              <pre class="output mono mb-2">{{ outputText }}</pre>
+              <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" @click="copyOutput">Copy</button>
+                <button class="btn btn-outline-secondary btn-sm" @click="downloadWords">Download .txt</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- memory view -->
+        <div v-if="showMemory" class="card mt-3 shadow-sm">
+          <div class="card-body">
+            <h6 class="card-title">Token Memory (sequence)</h6>
+            <p class="small text-muted">Each token listed left-to-right in sequence. 'word' tokens include
+              capitalization info.</p>
+            <div class="d-flex flex-wrap">
+              <template v-for="(t,i) in memory" :key="i">
+                <span class="badge bg-light text-dark token-pill border mono" :title="tokenTitle(t)">
+                  <strong v-if="t.type==='word'">W</strong>
+                  <em v-else>·</em>
+                  <span class="ms-1">{{ renderTokenLabel(t) }}</span>
+                </span>
+              </template>
+            </div>
+            <small class="text-muted d-block mt-2">(Hover badges to see token details.)</small>
+          </div>
+        </div>
       </div>
 
-      <div v-if="reconstructedText">
-        <h3>Reconstructed Text</h3>
-        <pre>{{ reconstructedText }}</pre>
+      <!-- Stage 2 -->
+      <div class="col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">Stage 2: Reconstruct</h5>
+            <p class="card-text text-muted small">
+              Paste the lowercased words (one per line). The tool will walk the stored token memory and reconstruct the
+              text, reapplying initial capitalization and every non-alphanumeric character in its original position.
+            </p>
+
+            <div class="mb-3">
+              <label class="form-label">Lowercased words (one per line)</label>
+              <textarea class="form-control mono" v-model="reconstructionInput"
+                placeholder="Paste the lowercased words (one per line) here..."></textarea>
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+              <button class="btn btn-primary" @click="reconstructText" :disabled="!memory.length">Reconstruct</button>
+              <button class="btn btn-outline-secondary" @click="clearStage2">Clear</button>
+              <button class="btn btn-outline-warning" @click="resetAll">Reset All</button>
+            </div>
+
+            <div v-if="reconstructedText">
+              <label class="form-label">Reconstructed text</label>
+              <pre class="output mono">{{ reconstructedText }}</pre>
+              <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" @click="copyReconstructed">Copy</button>
+                <button class="btn btn-outline-secondary btn-sm" @click="downloadReconstructed">Download .txt</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- optional helper -->
+        <div class="card mt-3 shadow-sm">
+          <div class="card-body">
+            <h6 class="card-title">Notes & Behavior</h6>
+            <ul class="small mb-0">
+              <li>Words are sequences of Unicode letters/marks/numbers. Diacritics are
+                handled as well.</li>
+              <li>Every non-alphanumeric character (including space, newline, punctuation, symbols) is stored as a
+                single token.</li>
+              <li>Capitalization memory only tracks whether the first grapheme of a word was uppercase; internal
+                capitalization (e.g. <code>iPhone</code>) is not preserved.</li>
+              <li>If fewer words are provided during reconstruction than the original word tokens, missing words are
+                treated as empty strings.</li>
+            </ul>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
+
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Bootstrap 5.3 bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
     const { createApp } = Vue;
@@ -89,88 +172,185 @@
     createApp({
       data() {
         return {
-          stage: 1,
           inputText: "",
           outputText: "",
+          memory: [], // sequence of tokens: {type: 'word'|'char', value?, cap?}
+          showMemory: false,
           reconstructionInput: "",
-          reconstructedText: "",
-          memory: [] // sequence of tokens: {type: 'word'|'punct'|'newline', ...}
+          reconstructedText: ""
         };
       },
       methods: {
+        // Token title for tooltip
+        tokenTitle(t) {
+          if (t.type === 'word') return `word: "${t.value}" cap:${t.cap}`;
+          return `char: ${this.describeChar(t.value)}`;
+        },
+        renderTokenLabel(t) {
+          if (t.type === 'word') return t.value.length <= 12 ? t.value : t.value.slice(0, 11) + '…';
+          // for printable, show visible symbol; for control like newline, show escape
+          return this.describeChar(t.value);
+        },
+        describeChar(ch) {
+          if (ch === '\n') return '\\n';
+          if (ch === '\r') return '\\r';
+          if (ch === '\t') return '\\t';
+          // show ordinary spaces as [space]
+          if (ch === ' ') return '[space]';
+          // otherwise show literal
+          return ch;
+        },
+
+        // Process input: tokenize into word tokens (alnum sequences) and single-char non-alnum tokens
         processText() {
           this.memory = [];
-          const words = [];
-
-          // Use Unicode property escapes if supported
+          this.outputText = "";
+          this.reconstructedText = "";
+          // Choose Unicode-aware token regex if supported
           let tokenRegex, wordRegex;
           try {
-            tokenRegex = /([\p{L}\p{M}\p{N}]+|[\p{P}\p{S}]+|\r?\n)/gu;
+            // Capture sequences of letters/marks/numbers as words; everything else as single char tokens (including whitespace, punctuation)
+            tokenRegex = /([\p{L}\p{M}\p{N}]+|[^\p{L}\p{M}\p{N}])/gu;
             wordRegex = /^[\p{L}\p{M}\p{N}]+$/u;
           } catch (e) {
-            tokenRegex = /([A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF]+|[^A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF]+|\r?\n)/g;
+            // Fallback: common latin ranges + digits; non-alnum as single characters
+            tokenRegex = /([A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF]+|[^A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF])/g;
             wordRegex = /^[A-Za-z0-9\u00C0-\u024F\u1E00-\u1EFF]+$/;
           }
 
           const tokens = this.inputText.match(tokenRegex) || [];
 
-          for (let token of tokens) {
-            if (token === "\n" || token === "\r\n") {
-              this.memory.push({ type: "newline" });
-              continue;
-            }
+          // Build lowercased output word list (one per line)
+          const wordsOut = [];
 
-            if (wordRegex.test(token)) {
-              const first = ([...token][0] || "");
+          for (const t of tokens) {
+            if (wordRegex.test(t)) {
+              // word token
+              // retain original for memory, but output lowercased word list
+              const original = t;
+              const first = ([...original][0] || "");
               const isCap = first !== first.toLowerCase();
-              this.memory.push({ type: "word", value: token, cap: isCap });
-              words.push(token.toLowerCase());
+              this.memory.push({ type: 'word', value: original, cap: isCap });
+              wordsOut.push(original.toLowerCase());
             } else {
-              this.memory.push({ type: "punct", value: token });
+              // every single non-alnum char becomes its own token
+              // keep char as-is (could be space, punctuation, newline, etc.)
+              this.memory.push({ type: 'char', value: t });
             }
           }
 
-          this.outputText = words.join("\n");
+          this.outputText = wordsOut.join("\n");
         },
 
         goToStage2() {
-          this.stage = 2;
+          // focus the reconstruction area in next tick
+          setTimeout(() => {
+            const el = document.querySelector('textarea[placeholder*="lowercased"]');
+            if (el) el.focus();
+          }, 50);
         },
 
+        // Reconstruct using memory and provided words
         reconstructText() {
-          const inputWords = this.reconstructionInput.split(/\r?\n/).filter(w => w.trim() !== "");
-          let wordIndex = 0;
-          let result = "";
+          this.reconstructedText = "";
+          const inputWords = this.reconstructionInput.split(/\r?\n/).filter(line => line !== null);
+          // We expect the user list to contain only word lines (lowercased). If they pasted empty lines intentionally, we keep them as empty strings only if they correspond to words.
+          // But typical use: each non-empty line matches a word.
+          // We'll consume inputWords in order whenever a memory token of type 'word' appears.
+          let wIndex = 0;
+          let out = "";
 
-          for (const item of this.memory) {
-            if (item.type === "word") {
-              let w = inputWords[wordIndex++] || "";
-              if (item.cap && w.length > 0) {
-                const chars = [...w];
+          for (const tok of this.memory) {
+            if (tok.type === 'word') {
+              const candidate = inputWords[wIndex] !== undefined ? inputWords[wIndex] : "";
+              wIndex++;
+              let word = candidate;
+              if (tok.cap && word.length > 0) {
+                // capitalize first grapheme in a Unicode-safe way
+                const chars = [...word];
                 chars[0] = chars[0].toLocaleUpperCase();
-                w = chars.join("");
+                word = chars.join("");
               }
-              result += w + " ";
-            } else if (item.type === "punct") {
-              result = result.trimEnd() + item.value + " ";
-            } else if (item.type === "newline") {
-              result = result.trimEnd() + "\n";
+              out += word;
+            } else if (tok.type === 'char') {
+              // insert the character exactly as stored
+              out += tok.value;
             }
           }
 
-          this.reconstructedText = result.trimEnd();
+          this.reconstructedText = out;
         },
 
-        reset() {
-          this.stage = 1;
+        // Utility actions
+        copyOutput() {
+          if (!this.outputText) return;
+          navigator.clipboard?.writeText(this.outputText).then(() => {
+            this.toast('Copied lowercased words to clipboard');
+          }).catch(() => this.toast('Copy failed'));
+        },
+        copyReconstructed() {
+          if (!this.reconstructedText) return;
+          navigator.clipboard?.writeText(this.reconstructedText).then(() => {
+            this.toast('Copied reconstructed text to clipboard');
+          }).catch(() => this.toast('Copy failed'));
+        },
+        downloadWords() {
+          if (!this.outputText) return;
+          const blob = new Blob([this.outputText], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'words.txt';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        },
+        downloadReconstructed() {
+          if (!this.reconstructedText) return;
+          const blob = new Blob([this.reconstructedText], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'reconstructed.txt';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        },
+        toast(msg) {
+          // simple transient alert using Bootstrap toast-like feedback via alert()
+          // Keep it simple and non-intrusive
+          const el = document.createElement('div');
+          el.className = 'alert alert-info position-fixed bottom-0 end-0 m-3';
+          el.style.zIndex = 1080;
+          el.textContent = msg;
+          document.body.appendChild(el);
+          setTimeout(() => el.classList.add('fade'), 10);
+          setTimeout(() => el.remove(), 1700);
+        },
+
+        clearStage1() {
           this.inputText = "";
           this.outputText = "";
+          this.memory = [];
+          this.showMemory = false;
+        },
+        clearStage2() {
           this.reconstructionInput = "";
           this.reconstructedText = "";
+        },
+        resetAll() {
+          this.inputText = "";
+          this.outputText = "";
           this.memory = [];
+          this.showMemory = false;
+          this.reconstructionInput = "";
+          this.reconstructedText = "";
         }
       }
-    }).mount("#app");
+    }).mount('#app');
   </script>
 </body>
+
 </html>
