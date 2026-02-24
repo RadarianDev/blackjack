@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Translation Manager</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+<style>
+body { height: 100vh; overflow: hidden; }
+.sidebar { height: 100vh; overflow-y: auto; border-right: 1px solid #ddd; }
+.entry-item { cursor: pointer; }
+.entry-item.active { background-color: #0d6efd; color: white; }
+textarea { min-height: 150px; }
+.word-clickable { cursor: pointer; color: #0d6efd; }
+.word-clickable:hover { text-decoration: underline; }
+.word-disabled { color: inherit; }
+</style>
+</head>
+
+<body>
+<div id="app" class="container-fluid">
+<div class="row h-100">
+
+<!-- Sidebar -->
+<div class="col-4 sidebar p-3">
+
+  <div class="mb-3">
+    <label class="form-label">Import Source JSON</label>
+    <input type="file" class="form-control" @change="loadSource">
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">Import Localization JSON</label>
+    <input type="file" class="form-control" @change="loadLocalization">
+  </div>
+
+  <div v-if="comparisonDone" class="mb-3">
+    <div v-if="missingKeys.length || extraKeys.length" class="alert alert-warning p-2">
+      <strong>Key mismatch detected:</strong><br>
+      Missing in localization: {{ missingKeys.length }}<br>
+      Extra in localization: {{ extraKeys.length }}
+    </div>
+    <div v-else class="alert alert-success p-2">
+      Source and localization keys match exactly.
+    </div>
+  </div>
+
+  <input type="text" class="form-control mb-3" v-model="search"
+         placeholder="Search keys or source text...">
+
+  <ul class="list-group">
+    <li v-for="entry in filteredEntries"
+        :key="entry.key"
+        @click="selectEntry(entry.key)"
+        class="list-group-item entry-item"
+        :class="{active: currentKey === entry.key}">
+      {{ entry.key }}
+    </li>
+  </ul>
+</div>
+
+<!-- Editor -->
+<div class="col-8 p-4">
+
+  <div v-if="currentEntry">
+
+    <h5>{{ currentEntry.key }}</h5>
+
+    <div class="mb-3">
+      <label class="form-label">Source (click words to search)</label>
+      <div class="border p-3 rounded bg-light">
+        <span v-for="(word, index) in tokenize(currentEntry.source)"
+              :key="index"
+              :class="isIgnoredWord(word) ? 'word-disabled' : 'word-clickable'"
+              @click="handleWordClick(word)">
+          {{ word }}
+        </span>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label">Localization</label>
+      <textarea class="form-control"
+                v-model="localizationFlat[currentEntry.key]"></textarea>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-secondary" @click="goBack" :disabled="!canGoBack">
+        ← Back
+      </button>
+      <button class="btn btn-secondary" @click="goForward" :disabled="!canGoForward">
+        Next →
+      </button>
+      <button class="btn btn-success ms-auto" @click="exportLocalization">
+        Export Localization
+      </button>
+    </div>
+
+  </div>
+
+  <div v-else class="text-muted">
+    Select an entry from the left.
+  </div>
+
+</div>
+</div>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+data() {
+  return {
+    sourceFlat: {},
+    localizationFlat: {},
+    entries: [],
+    currentKey: null,
+    search: '',
+    history: [],
+    historyIndex: -1,
+    comparisonDone: false,
+    missingKeys: [],
+    extraKeys: [],
+    ignoredWords: new Set([
+      "the","a","an","and","or","but","if","then","else",
+      "in","on","at","by","for","with","about","against",
+      "between","into","through","during","before","after",
+      "above","below","to","from","up","down","out","over",
+      "under","again","further","once",
+      "is","are","was","were","be","been","being",
+      "have","has","had","do","does","did",
+      "of","as","that","this","these","those"
+    ])
+  };
+},
+
+computed: {
+  currentEntry() {
+    if (!this.currentKey) return null;
+    return {
+      key: this.currentKey,
+      source: this.sourceFlat[this.currentKey] ?? ''
+    };
+  },
+
+  filteredEntries() {
+    if (!this.search) return this.entries;
+    const term = this.search.toLowerCase();
+    return this.entries.filter(e =>
+      e.key.toLowerCase().includes(term) ||
+      (e.source && e.source.toLowerCase().includes(term))
+    );
+  },
+
+  canGoBack() { return this.historyIndex > 0; },
+  canGoForward() { return this.historyIndex < this.history.length - 1; }
+},
+
+methods: {
+
+  async loadSource(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const json = JSON.parse(text);
+    this.sourceFlat = this.flatten(json);
+    this.rebuildEntries();
+    this.compareKeys();
+  },
+
+  async loadLocalization(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    const json = JSON.parse(text);
+    this.localizationFlat = this.flatten(json);
+    this.compareKeys();
+  },
+
+  flatten(obj, parent = '', result = {}) {
+    for (let key in obj) {
+      const newKey = parent
+        ? (Array.isArray(obj) ? `${parent}[${key}]` : `${parent}.${key}`)
+        : key;
+
+      if (typeof obj[key] === 'object' && obj[key] !== null) {
+        this.flatten(obj[key], newKey, result);
+      } else {
+        result[newKey] = obj[key];
+      }
+    }
+    return result;
+  },
+
+  unflatten(flatObj) {
+    const result = {};
+    for (let flatKey in flatObj) {
+      const value = flatObj[flatKey];
+      const parts = flatKey.replace(/\[(\d+)\]/g, '.$1').split('.');
+      let current = result;
+
+      parts.forEach((part, index) => {
+        if (index === parts.length - 1) {
+          current[part] = value;
+        } else {
+          if (!current[part]) {
+            current[part] = isNaN(parts[index + 1]) ? {} : [];
+          }
+          current = current[part];
+        }
+      });
+    }
+    return result;
+  },
+
+  rebuildEntries() {
+    this.entries = Object.keys(this.sourceFlat).map(key => ({
+      key,
+      source: this.sourceFlat[key]
+    }));
+  },
+
+  compareKeys() {
+    if (!Object.keys(this.sourceFlat).length ||
+        !Object.keys(this.localizationFlat).length) return;
+
+    const sourceKeys = new Set(Object.keys(this.sourceFlat));
+    const locKeys = new Set(Object.keys(this.localizationFlat));
+
+    this.missingKeys = [...sourceKeys].filter(k => !locKeys.has(k));
+    this.extraKeys = [...locKeys].filter(k => !sourceKeys.has(k));
+    this.comparisonDone = true;
+  },
+
+  selectEntry(key) {
+    if (this.currentKey !== key) {
+      this.history = this.history.slice(0, this.historyIndex + 1);
+      this.history.push(key);
+      this.historyIndex++;
+    }
+    this.currentKey = key;
+
+    if (!(key in this.localizationFlat)) {
+      this.localizationFlat[key] = '';
+    }
+  },
+
+  tokenize(text) {
+    return text.split(/(\s+|[.,!?;:"()])/).filter(t => t !== '');
+  },
+
+  isIgnoredWord(word) {
+    const cleaned = word.toLowerCase().replace(/[^a-z]/g,'');
+    return this.ignoredWords.has(cleaned);
+  },
+
+  handleWordClick(word) {
+    const cleaned = word.toLowerCase().replace(/[^a-z]/g,'');
+    if (!cleaned || this.isIgnoredWord(word)) return;
+    this.search = cleaned;
+  },
+
+  goBack() {
+    if (this.canGoBack) {
+      this.historyIndex--;
+      this.currentKey = this.history[this.historyIndex];
+    }
+  },
+
+  goForward() {
+    if (this.canGoForward) {
+      this.historyIndex++;
+      this.currentKey = this.history[this.historyIndex];
+    }
+  },
+
+  exportLocalization() {
+    const nested = this.unflatten(this.localizationFlat);
+    const blob = new Blob([JSON.stringify(nested, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'localization.json';
+    link.click();
+  }
+
+}
+
+}).mount('#app');
+</script>
+
+</body>
+</html>
