@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chemistry Practice</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+
+<body class="bg-light">
+    <nav class="navbar bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1 text-white">Procvičování chemických rovnic</span>
+            <span class="mb-0 h1"></h3>
+        </div>
+    </nav>
+
+    <div id="app" class="container py-4">
+        <!-- QUIZ -->
+        <div v-if="!submitted" class="row g-3">
+            <div v-for="(q, index) in questions" :key="index" class="col-12 col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h6 class="card-title">Otázka {{ index + 1 }}</h6>
+
+                        <p class="card-text fs-5">
+                            <span v-html="formatChemical(q.reactants)"></span> →
+                        </p>
+
+                        <input :ref="el => setInputRef(el, index)" v-model="q.userAnswer"
+                            @keydown.enter.prevent="handleEnter(index)" type="text" class="form-control"
+                            placeholder="Zadej produkty (např. H2O + CO2)">
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 text-center mt-3">
+                <button class="btn btn-primary btn-lg" @click="submitAnswers">
+                    Potvrdit
+                </button>
+            </div>
+        </div>
+
+        <!-- RESULTS -->
+        <div v-else>
+            <!-- Score summary -->
+            <div class="mb-4">
+                <h4 class="text-center">
+                    Body: {{ score }} / {{ questions.length }}
+                </h4>
+
+                <div class="progress">
+                    <div class="progress-bar bg-success" role="progressbar" :style="{ width: scorePercent + '%' }"
+                        :aria-valuenow="scorePercent" aria-valuemin="0" aria-valuemax="100">
+                        {{ scorePercent }}%
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div v-for="(q, index) in questions" :key="index" class="col-12 col-md-6">
+                    <div class="card h-100" :class="q.correct ? 'border-success' : 'border-danger'">
+                        <div class="card-body">
+                            <h6 class="card-title">Otázka {{ index + 1 }}</h6>
+
+                            <p class="card-text fs-5">
+                                <span v-html="formatChemical(q.reactants)"></span> → <span
+                                    v-html="formatChemical(q.userAnswer || ' (nic)')"></span>
+                            </p>
+
+                            <p v-if="!q.correct" class="mb-0">
+                                <strong>Správně:</strong> <span v-html="formatChemical(q.reactants)"></span> → <span
+                                    v-html="formatChemical(q.products)"></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <button class="btn btn-success btn-lg" @click="startNew">
+                    Zkusit znovu
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        body {
+            font-family:
+                "Verdana Math",
+                "Cambria Math",
+                "STIX Two Math",
+                "DejaVu Sans",
+                "Arial",
+                sans-serif;
+        }
+    </style>
+
+    <script>
+        const { createApp, nextTick } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    allEquations: [],
+                    questions: [],
+                    submitted: false,
+                    inputRefs: []
+                };
+            },
+
+            computed: {
+                score() {
+                    return this.questions.filter(q => q.correct).length;
+                },
+                scorePercent() {
+                    return Math.round((this.score / this.questions.length) * 100);
+                }
+            },
+
+            methods: {
+                async loadData() {
+                    const res = await fetch('equations.json');
+                    this.allEquations = await res.json();
+                    this.startNew();
+                },
+
+                startNew() {
+                    this.submitted = false;
+                    this.inputRefs = [];
+
+                    const shuffled = [...this.allEquations]
+                        .sort(() => Math.random() - 0.5)
+                        .slice(0, 10);
+
+                    this.questions = shuffled.map(eq => {
+                        const [reactants, products] = eq.split('->').map(s => s.trim());
+                        return {
+                            reactants,
+                            products,
+                            userAnswer: '',
+                            correct: false
+                        };
+                    });
+
+                    nextTick(() => {
+                        if (this.inputRefs[0]) this.inputRefs[0].focus();
+                    });
+                },
+
+                setInputRef(el, index) {
+                    if (el) this.inputRefs[index] = el;
+                },
+
+                handleEnter(index) {
+                    if (index < this.inputRefs.length - 1) {
+                        this.inputRefs[index + 1].focus();
+                    } else {
+                        this.submitAnswers();
+                    }
+                },
+
+                normalizeSide(side) {
+                    return side
+                        .split('+')
+                        .map(s => s.trim())
+                        .filter(s => s.length > 0)
+                        .sort()
+                        .join('|');
+                },
+
+                submitAnswers() {
+                    this.questions.forEach(q => {
+                        const correct = this.normalizeSide(q.products);
+                        const user = this.normalizeSide(q.userAnswer || '');
+                        q.correct = correct === user;
+                    });
+
+                    this.submitted = true;
+                },
+
+                formatChemical(text) {
+                    return text
+                        .split('+')
+                        .map(part => {
+                            part = part.trim();
+
+                            const match = part.match(/^(\d+)\s+(.*)$/);
+
+                            if (match) {
+                                const coeff = match[1];
+                                const formula = match[2];
+                                return coeff + ' ' + this.subscriptDigits(formula);
+                            }
+
+                            return this.subscriptDigits(part);
+                        })
+                        .join(' + ');
+                },
+
+                subscriptDigits(formula) {
+                    return formula.replace(/(\d+)/g, '<sub>$1</sub>');
+                }
+            },
+
+            mounted() {
+                this.loadData();
+            }
+        }).mount('#app');
+    </script>
+
+</body>
+
+</html>
